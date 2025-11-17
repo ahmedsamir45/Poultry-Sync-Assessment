@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Poultry Sync - Order Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        .product-table th { vertical-align: middle; }
+        .status-active { color: #198754; }
+        .status-inactive { color: #dc3545; }
+        .product-actions { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">Poultry Sync</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#products">Products</a>
+                    </li>
+                    {% if user.is_admin or user.is_operator %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#orders">My Orders</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle me-1"></i> {{ user.get_full_name|default:user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><span class="dropdown-item-text"><i class="bi bi-envelope me-2"></i>{{ user.email }}</span></li>
+                                <li><span class="dropdown-item-text"><i class="bi bi-building me-2"></i>{{ user.company.name }}</span></li>
+                                <li><span class="dropdown-item-text"><i class="bi bi-person-badge me-2"></i>{{ user.get_role_display }}</span></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'admin:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin:login' %}">Login</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if user.is_authenticated %}
+            <!-- Product Creation Form -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="mb-0">Add New Product</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'api:product-list' %}" class="row g-3" id="productForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="company" value="{{ user.company.id }}">
+                        <input type="hidden" name="created_by" value="{{ user.id }}">
+                        
+                        <div class="col-md-4">
+                            <label for="name" class="form-label">Product Name</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="price" class="form-label">Price ($)</label>
+                            <input type="number" class="form-control" id="price" name="price" min="0" step="0.01" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="stock" class="form-label">Initial Stock</label>
+                            <input type="number" class="form-control" id="stock" name="stock" min="0" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="is_active" class="form-label">Status</label>
+                            <select class="form-select" id="is_active" name="is_active">
+                                <option value="true" selected>Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-circle me-1"></i> Add Product
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Products Table -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">Products</h4>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showInactive" onchange="toggleInactiveProducts()">
+                        <label class="form-check-label" for="showInactive">Show Inactive</label>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th class="text-end">Price</th>
+                                <th class="text-center">Stock</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr class="product-row{% if not product.is_active %} table-secondary inactive-product d-none{% endif %}" 
+                                data-product-id="{{ product.id }}" 
+                                data-product-name="{{ product.name }}"
+                                data-product-stock="{{ product.stock }}"
+                                data-product-active="{{ product.is_active|lower }}">
+                                <td>
+                                    {{ product.name }}
+                                    {% if not product.is_active %}
+                                        <span class="badge bg-secondary ms-2">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">${{ product.price|floatformat:2 }}</td>
+                                <td class="text-center">{{ product.stock }}</td>
+                                <td class="text-center">
+                                    {% if product.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end product-actions">
+                                    {% if product.is_active and user.is_admin %}
+                                        <button class="btn btn-sm btn-outline-primary order-btn" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#orderModal">
+                                            <i class="bi bi-cart-plus"></i> Order
+                                        </button>
+                                    {% endif %}
+                                    {% if user.is_admin or user.is_operator %}
+                                        <button class="btn btn-sm btn-outline-secondary edit-product" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#editProductModal"
+                                                data-id="{{ product.id }}"
+                                                data-name="{{ product.name }}"
+                                                data-price="{{ product.price|floatformat:2 }}"
+                                                data-stock="{{ product.stock }}"
+                                                data-is-active="{{ product.is_active|lower }}">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger delete-product" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#deleteProductModal"
+                                                data-id="{{ product.id }}"
+                                                data-name="{{ product.name }}">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    {% endif %}
+                                    {% if user.is_admin %}
+                                        <form action="{% url 'api:product-toggle-active' product.id %}" method="post" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-{% if product.is_active %}warning{% else %}success{% endif %}" 
+                                                    title="{% if product.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                                <i class="bi {% if product.is_active %}bi-eye-slash{% else %}bi-eye{% endif %}"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <div class="text-muted">No products found. Add your first product using the form above.</div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Orders Table -->
+            {% if user.is_admin or user.is_operator or user.is_viewer %}
+            <div class="card mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">Orders</h4>
+                    {% if user.is_admin or user.is_operator %}
+                    <a href="{% url 'api:order-export' %}" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-download me-1"></i> Export CSV
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Product</th>
+                                <th class="text-center">Quantity</th>
+                                <th class="text-center">Status</th>
+                                <th>Created By</th>
+                                <th>Created At</th>
+                                <th>Shipped At</th>
+                                {% if user.is_admin or user.is_operator %}
+                                <th class="text-end">Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>
+                                    <small class="text-muted">#{{ order.id|slice:":8" }}</small>
+                                </td>
+                                <td>{{ order.product.name }}</td>
+                                <td class="text-center">{{ order.quantity }}</td>
+                                <td class="text-center">
+                                    {% if order.status == 'success' %}
+                                        <span class="badge bg-success">{{ order.get_status_display }}</span>
+                                    {% elif order.status == 'failed' %}
+                                        <span class="badge bg-danger">{{ order.get_status_display }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ order.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ order.created_by.get_full_name|default:order.created_by.username }}</small>
+                                </td>
+                                <td>
+                                    <small>{{ order.created_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    {% if order.shipped_at %}
+                                        <small>{{ order.shipped_at|date:"Y-m-d H:i" }}</small>
+                                    {% else %}
+                                        <small class="text-muted">-</small>
+                                    {% endif %}
+                                </td>
+                                {% if user.is_admin or user.is_operator %}
+                                <td class="text-end">
+                                    {% if order.can_edit %}
+                                        <button class="btn btn-sm btn-outline-primary edit-order-btn" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#editOrderModal"
+                                                data-order-id="{{ order.id }}"
+                                                data-order-product="{{ order.product.name }}"
+                                                data-order-quantity="{{ order.quantity }}"
+                                                data-order-status="{{ order.status }}">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </button>
+                                    {% else %}
+                                        {% if user.is_operator %}
+                                            <span class="text-muted small" title="You can only edit orders created today">Can't edit</span>
+                                        {% else %}
+                                            <span class="text-muted small">Can't edit</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if user.is_admin or user.is_operator %}8{% else %}7{% endif %}" class="text-center py-4">
+                                    <div class="text-muted">No orders found. Create your first order from the products table above.</div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="text-center py-5">
+                <h2>Welcome to Poultry Sync</h2>
+                <p class="lead text-muted mb-4">Please sign in to access the ordering system</p>
+                <a href="{% url 'admin:login' %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Login
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Order Modal -->
+    <div class="modal fade" id="orderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Place Order</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="orderForm" method="post" action="{% url 'api:order-list' %}">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <input type="hidden" name="product" id="order-product-id">
+                        <input type="hidden" name="created_by" value="{{ user.id }}">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <input type="text" class="form-control" id="order-product-name" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="order-quantity" class="form-label">Quantity</label>
+                            <input type="number" class="form-control" id="order-quantity" name="quantity" min="1" value="1" required>
+                            <div class="form-text">Available stock: <span id="available-stock">0</span></div>
+                        </div>
+                        <div class="alert alert-warning d-none" id="stock-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <span id="stock-warning-text"></span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submit-order">
+                            <i class="bi bi-check-circle me-1"></i> Place Order
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div class="modal fade" id="editProductModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="editProductForm">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <input type="hidden" name="product_id" id="edit-product-id">
+                        
+                        <div class="mb-3">
+                            <label for="edit-product-name" class="form-label">Product Name</label>
+                            <input type="text" class="form-control" id="edit-product-name" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-product-price" class="form-label">Price ($)</label>
+                            <input type="number" class="form-control" id="edit-product-price" name="price" min="0" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-product-stock" class="form-label">Stock</label>
+                            <input type="number" class="form-control" id="edit-product-stock" name="stock" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-product-is-active" class="form-label">Status</label>
+                            <select class="form-select" id="edit-product-is-active" name="is_active">
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submit-edit-product">
+                            <i class="bi bi-check-circle me-1"></i> Update Product
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Product Modal -->
+    <div class="modal fade" id="deleteProductModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="deleteProductForm">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete <strong id="delete-product-name"></strong>?</p>
+                        <p class="text-muted small">This will soft-delete the product (mark it as inactive).</p>
+                        <input type="hidden" id="delete-product-id" name="product_id">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger" id="confirm-delete-product">
+                            <i class="bi bi-trash me-1"></i> Delete
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Order Modal -->
+    <div class="modal fade" id="editOrderModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Order</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="editOrderForm" method="patch">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <input type="hidden" name="order_id" id="edit-order-id">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <input type="text" class="form-control" id="edit-order-product-name" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-order-quantity" class="form-label">Quantity</label>
+                            <input type="number" class="form-control" id="edit-order-quantity" name="quantity" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-order-status" class="form-label">Status</label>
+                            <select class="form-select" id="edit-order-status" name="status">
+                                <option value="pending">Pending</option>
+                                <option value="success">Success</option>
+                                <option value="failed">Failed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submit-edit-order">
+                            <i class="bi bi-check-circle me-1"></i> Update Order
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle inactive products visibility
+        function toggleInactiveProducts() {
+            document.querySelectorAll('.inactive-product').forEach(el => {
+                el.classList.toggle('d-none', !document.getElementById('showInactive').checked);
+            });
+        }
+
+        // Order modal handling
+        const orderModal = document.getElementById('orderModal');
+        if (orderModal) {
+            orderModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const row = button.closest('tr');
+                const productId = row.dataset.productId;
+                const productName = row.dataset.productName;
+                const maxStock = parseInt(row.dataset.productStock);
+                const isActive = row.dataset.productActive === 'true';
+
+                // Update modal content
+                const modalTitle = orderModal.querySelector('.modal-title');
+                const productNameInput = orderModal.querySelector('#order-product-name');
+                const productIdInput = orderModal.querySelector('#order-product-id');
+                const quantityInput = orderModal.querySelector('#order-quantity');
+                const availableStock = orderModal.querySelector('#available-stock');
+                const stockWarning = orderModal.querySelector('#stock-warning');
+                const submitBtn = orderModal.querySelector('#submit-order');
+
+                // Set values
+                productNameInput.value = productName;
+                productIdInput.value = productId;
+                availableStock.textContent = maxStock;
+                quantityInput.max = maxStock;
+                quantityInput.value = 1;
+                
+                // Disable order button if product is inactive
+                submitBtn.disabled = !isActive;
+                
+                if (!isActive) {
+                    stockWarning.classList.remove('d-none');
+                    stockWarning.querySelector('#stock-warning-text').textContent = 
+                        'This product is currently inactive and cannot be ordered.';
+                } else {
+                    stockWarning.classList.add('d-none');
+                }
+
+                // Handle quantity validation
+                quantityInput.addEventListener('input', function() {
+                    const quantity = parseInt(this.value) || 0;
+                    if (quantity > maxStock) {
+                        stockWarning.classList.remove('d-none');
+                        stockWarning.querySelector('#stock-warning-text').textContent = 
+                            `Order quantity (${quantity}) exceeds available stock (${maxStock}).`;
+                        submitBtn.disabled = true;
+                    } else if (quantity <= 0) {
+                        stockWarning.classList.remove('d-none');
+                        stockWarning.querySelector('#stock-warning-text').textContent = 
+                            'Please enter a valid quantity (minimum 1).';
+                        submitBtn.disabled = true;
+                    } else {
+                        stockWarning.classList.add('d-none');
+                        submitBtn.disabled = !isActive;
+                    }
+                });
+            });
+        }
+
+        // Handle form submission with fetch for better UX
+        // Handle product form submission
+        const productForm = document.getElementById('productForm');
+        if (productForm) {
+            productForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+                
+                // Prepare the product data
+                const formData = new FormData(this);
+                const isActiveValue = formData.get('is_active');
+                const productData = {
+                    name: formData.get('name'),
+                    price: parseFloat(formData.get('price')),
+                    stock: parseInt(formData.get('stock'), 10),
+                    is_active: isActiveValue === 'true' || isActiveValue === true,
+                    company: formData.get('company'),
+                    created_by: formData.get('created_by')
+                };
+                
+                fetch(this.action, {
+                    method: 'POST',
+                    body: JSON.stringify(productData),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert('success', 'Product created successfully!');
+                    this.reset();
+                    location.reload();
+                })
+                .catch(error => {
+                    showAlert('danger', error.detail || 'Failed to create product. Please try again.');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const orderForm = document.getElementById('orderForm');
+            if (orderForm) {
+                orderForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalBtnText = submitBtn.innerHTML;
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Placing Order...';
+                    
+                    const formData = new FormData(this);
+                    const orderModal = bootstrap.Modal.getInstance(document.getElementById('orderModal'));
+                    
+                    // Prepare the order data in the format expected by the API
+                    const orderData = {
+                        product: formData.get('product'),
+                        quantity: parseInt(formData.get('quantity'), 10),
+                        created_by: formData.get('created_by')
+                    };
+                    
+                    fetch(this.action, {
+                        method: 'POST',
+                        body: JSON.stringify(orderData),
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => { throw err; });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showAlert('success', 'Order placed successfully!');
+                        if (orderModal) orderModal.hide();
+                        location.reload();
+                    })
+                    .catch(error => {
+                        showAlert('danger', error.detail || 'Failed to place order. Please try again.');
+                    })
+                    .finally(() => {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnText;
+                    });
+                });
+            }
+        })
+
+        // Edit Product Modal handling
+        const editProductModal = document.getElementById('editProductModal');
+        if (editProductModal) {
+            editProductModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const productId = button.dataset.id;
+                const productName = button.dataset.name;
+                const productPrice = button.dataset.price;
+                const productStock = button.dataset.stock;
+                const productIsActive = button.dataset.isActive === 'true';
+
+                // Update modal content
+                const productIdInput = editProductModal.querySelector('#edit-product-id');
+                const nameInput = editProductModal.querySelector('#edit-product-name');
+                const priceInput = editProductModal.querySelector('#edit-product-price');
+                const stockInput = editProductModal.querySelector('#edit-product-stock');
+                const isActiveSelect = editProductModal.querySelector('#edit-product-is-active');
+
+                // Set values
+                productIdInput.value = productId;
+                nameInput.value = productName;
+                priceInput.value = productPrice;
+                stockInput.value = productStock;
+                isActiveSelect.value = productIsActive ? 'true' : 'false';
+            });
+        }
+
+        // Handle edit product form submission
+        const editProductForm = document.getElementById('editProductForm');
+        if (editProductForm) {
+            editProductForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Updating...';
+                
+                const formData = new FormData(this);
+                const productId = formData.get('product_id');
+                const editModal = bootstrap.Modal.getInstance(document.getElementById('editProductModal'));
+                
+                // Prepare the product data
+                const isActiveValue = formData.get('is_active');
+                const productData = {
+                    name: formData.get('name'),
+                    price: parseFloat(formData.get('price')),
+                    stock: parseInt(formData.get('stock'), 10),
+                    is_active: isActiveValue === 'true' || isActiveValue === true
+                };
+                
+                // Get the product update URL from the API
+                const updateUrl = `/api/products/${productId}/`;
+                
+                fetch(updateUrl, {
+                    method: 'PATCH',
+                    body: JSON.stringify(productData),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert('success', 'Product updated successfully!');
+                    if (editModal) editModal.hide();
+                    location.reload();
+                })
+                .catch(error => {
+                    showAlert('danger', error.detail || 'Failed to update product. Please try again.');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                });
+            });
+        }
+
+        // Delete Product Modal handling
+        const deleteProductModal = document.getElementById('deleteProductModal');
+        if (deleteProductModal) {
+            deleteProductModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const productId = button.dataset.id;
+                const productName = button.dataset.name;
+
+                // Update modal content
+                const productIdInput = deleteProductModal.querySelector('#delete-product-id');
+                const productNameSpan = deleteProductModal.querySelector('#delete-product-name');
+
+                // Set values
+                productIdInput.value = productId;
+                productNameSpan.textContent = productName;
+            });
+        }
+
+        // Handle delete product form submission
+        const deleteProductForm = document.getElementById('deleteProductForm');
+        if (deleteProductForm) {
+            deleteProductForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const productId = document.getElementById('delete-product-id').value;
+                const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteProductModal'));
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
+                
+                // Get CSRF token from form
+                const formData = new FormData(this);
+                const csrfToken = formData.get('csrfmiddlewaretoken');
+                
+                // Delete the product
+                fetch(`/api/products/${productId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    // 204 No Content is success for DELETE operations
+                    if (response.status === 204 || response.ok) {
+                        return response;
+                    }
+                    // Handle error responses
+                    return response.text().then(text => {
+                        try {
+                            const err = JSON.parse(text);
+                            throw err;
+                        } catch {
+                            throw { detail: `Error ${response.status}: ${response.statusText || text}` };
+                        }
+                    });
+                })
+                .then(response => {
+                    // Handle both 204 (No Content) and 200 (with message) responses
+                    if (response.status === 204) {
+                        showAlert('success', 'Product deleted successfully!');
+                        if (deleteModal) deleteModal.hide();
+                        location.reload();
+                    } else {
+                        // Try to get message from response body (200 OK)
+                        return response.json().then(data => {
+                            showAlert('success', data.detail || 'Product deleted successfully!');
+                            if (deleteModal) deleteModal.hide();
+                            location.reload();
+                        });
+                    }
+                })
+                .catch(error => {
+                    const errorMsg = error.detail || error.message || 'Failed to delete product. Please try again.';
+                    showAlert('danger', errorMsg);
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                });
+            });
+        }
+
+        // Edit Order Modal handling
+        const editOrderModal = document.getElementById('editOrderModal');
+        if (editOrderModal) {
+            editOrderModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const orderId = button.dataset.orderId;
+                const productName = button.dataset.orderProduct;
+                const quantity = button.dataset.orderQuantity;
+                const status = button.dataset.orderStatus;
+
+                // Update modal content
+                const orderIdInput = editOrderModal.querySelector('#edit-order-id');
+                const productNameInput = editOrderModal.querySelector('#edit-order-product-name');
+                const quantityInput = editOrderModal.querySelector('#edit-order-quantity');
+                const statusSelect = editOrderModal.querySelector('#edit-order-status');
+
+                // Set values
+                orderIdInput.value = orderId;
+                productNameInput.value = productName;
+                quantityInput.value = quantity;
+                statusSelect.value = status;
+            });
+        }
+
+        // Handle edit order form submission
+        const editOrderForm = document.getElementById('editOrderForm');
+        if (editOrderForm) {
+            editOrderForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Updating...';
+                
+                const formData = new FormData(this);
+                const orderId = formData.get('order_id');
+                const editModal = bootstrap.Modal.getInstance(document.getElementById('editOrderModal'));
+                
+                // Prepare the order data
+                const orderData = {
+                    quantity: parseInt(formData.get('quantity'), 10),
+                    status: formData.get('status')
+                };
+                
+                // Get the order update URL from the API
+                const updateUrl = `/api/orders/${orderId}/`;
+                
+                fetch(updateUrl, {
+                    method: 'PATCH',
+                    body: JSON.stringify(orderData),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert('success', 'Order updated successfully!');
+                    if (editModal) editModal.hide();
+                    location.reload();
+                })
+                .catch(error => {
+                    showAlert('danger', error.detail || 'Failed to update order. Please try again.');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                });
+            });
+        }
+
+        // Helper function to show alerts
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.role = 'alert';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                alert.close();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

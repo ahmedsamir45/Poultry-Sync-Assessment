@@ -1,0 +1,90 @@
+[2025-11-17T19:00:02.239411+00:00] ORDER CONFIRMATION EMAIL
+To: 3bas@gmail.com
+Subject: Order Confirmation - Order #5b02f62b-4941-4a62-9e2e-ac9f34802b29
+
+Dear 3bas_first 3bas_last,
+
+Your order has been confirmed!
+
+Order Details:
+  Order ID: 5b02f62b-4941-4a62-9e2e-ac9f34802b29
+  Product: test
+  Quantity: 1
+  Status: Success
+  Order Date: 2025-11-17 19:00:02
+  Shipped At: 2025-11-17 19:00:02
+
+Thank you for your order!
+================================================================================
+[2025-11-17T19:00:07.990222+00:00] ORDER CONFIRMATION EMAIL
+To: 3bas@gmail.com
+Subject: Order Confirmation - Order #073bb21e-0afe-4d65-a7b6-a09b485bdc0e
+
+Dear 3bas_first 3bas_last,
+
+Your order has been confirmed!
+
+Order Details:
+  Order ID: 073bb21e-0afe-4d65-a7b6-a09b485bdc0e
+  Product: test
+  Quantity: 1
+  Status: Success
+  Order Date: 2025-11-17 19:00:07
+  Shipped At: 2025-11-17 19:00:07
+
+Thank you for your order!
+================================================================================
+[2025-11-17T19:00:13.763678+00:00] ORDER CONFIRMATION EMAIL
+To: 3bas@gmail.com
+Subject: Order Confirmation - Order #d2323549-c832-48d5-895f-06618c48104f
+
+Dear 3bas_first 3bas_last,
+
+Your order has been confirmed!
+
+Order Details:
+  Order ID: d2323549-c832-48d5-895f-06618c48104f
+  Product: test
+  Quantity: 3
+  Status: Success
+  Order Date: 2025-11-17 19:00:13
+  Shipped At: 2025-11-17 19:00:13
+
+Thank you for your order!
+================================================================================
+[2025-11-17T19:53:58.024650+00:00] ORDER CONFIRMATION EMAIL
+To: ahmedsamer6788@gmail.com
+Subject: Order Confirmation - Order #548bcafe-3139-4a90-ac62-82c4378b28a6
+
+Dear Ahmed Samir,
+
+Your order has been confirmed!
+
+Order Details:
+  Order ID: 548bcafe-3139-4a90-ac62-82c4378b28a6
+  Product: test
+  Quantity: 1
+  Status: Success
+  Order Date: 2025-11-17 19:53:58
+  Shipped At: 2025-11-17 19:53:58
+
+Thank you for your order!
+================================================================================
+[2025-11-17T19:59:11.271642+00:00] ORDER CONFIRMATION EMAIL
+To: ahmedsamer6788@gmail.com
+Subject: Order Confirmation - Order #175970d5-9c5b-426d-bb72-eea97d0deb1b
+
+Dear Ahmed Samir,
+
+Your order has been confirmed!
+
+Order Details:
+  Order ID: 175970d5-9c5b-426d-bb72-eea97d0deb1b
+  Product: test
+  Quantity: 3
+  Status: Success
+  Order Date: 2025-11-17 19:59:11
+  Shipped At: 2025-11-17 19:59:11
+
+Thank you for your order!
+================================================================================

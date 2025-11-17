@@ -1,0 +1,9 @@
+asgiref==3.10.0
+Django==4.2.7
+django-filter==25.2
+djangorestframework==3.16.1
+drf-spectacular==0.29.0
+Markdown==3.10
+sqlparse==0.5.3
+tzdata==2025.2
+psycopg2-binary==2.9.9
