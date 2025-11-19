@@ -23,12 +23,13 @@ class CustomUser(AbstractUser):
         OPERATOR = 'operator', 'Operator'
         VIEWER = 'viewer', 'Viewer'
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True,blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.VIEWER)
 
     def __str__(self):
-        role_name = self.get_role_display()
-        return f"{self.username} ({role_name} - {self.company.name})"
+        role = self.get_role_display()
+        return f"{self.username} ({role} - {self.company.name if self.company else '---'})"
+
 
     @property
     def is_admin(self):
