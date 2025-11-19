@@ -1,13 +1,13 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-from django.core.exceptions import ValidationError
+
 
 import uuid
 
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -81,7 +81,7 @@ class Order(models.Model):
     
     created_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    shipped_at = models.DateTimeField(null=True, blank=True)
+    shipped_at = models.DateTimeField(null=True, blank=True) # we should add completed at here
 
     class Meta:
         ordering = ["-created_at"]
@@ -104,3 +104,19 @@ class Order(models.Model):
 
     def validate_stock(self):
         return self.product.stock >= self.quantity
+    
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+
+
+@receiver(post_save, sender=Order)
+def handle_order_status_change(sender, instance, created, **kwargs):
+    
+
+    
+    # Deduct stock
+    if instance.validate_stock():
+        instance.product.stock -= instance.quantity
+        instance.product.save()

@@ -33,11 +33,11 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     
     # Authentication URLs - using csrf_exempt for the login view
-    path('accounts/login/', csrf_exempt(auth_views.LoginView.as_view(template_name='rest_framework/login.html')), name='login'),
-    path('accounts/logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
+    # path('accounts/login/', csrf_exempt(auth_views.LoginView.as_view(template_name='rest_framework/login.html')), name='login'),
+    # path('accounts/logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
     
     # Admin login (separate from main login)
-    path('admin/login/', csrf_exempt(auth_views.LoginView.as_view(template_name='admin/login.html')), name='admin_login'),
+    # path('admin/login/', csrf_exempt(auth_views.LoginView.as_view(template_name='admin/login.html')), name='admin_login'),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

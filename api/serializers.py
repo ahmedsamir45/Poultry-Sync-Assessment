@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Product, Order, Company
+from .models import Product, Order
+from django.utils import timezone
+from django.db import transaction
+
 
 User = get_user_model()
 
@@ -12,6 +15,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 
                  'role', 'company', 'company_name', 'is_active', 'date_joined']
         read_only_fields = ['date_joined', 'is_active']
+        
+        # extra_kwargs:write_only read_only required default allow_null
+        
         extra_kwargs = {
             'password': {'write_only': True},
             'company': {'required': False}
@@ -36,8 +42,9 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at']
 
 class OrderSerializer(serializers.ModelSerializer):
+
     product_name = serializers.CharField(source='product.name', read_only=True)
-    
+    # because the name fieled not exist in the order model
     class Meta:
         model = Order
         fields = ['id', 'product', 'product_name', 'quantity', 'status', 'created_at', 'shipped_at']
@@ -81,10 +88,7 @@ class OrderSerializer(serializers.ModelSerializer):
         new_status = validated_data.get('status', instance.status)
         
         if new_status == Order.Status.SUCCESS:
-            from django.utils import timezone
-            from django.db import transaction
-            from .models import Order
-            
+          
             # Set shipped_at if not already set
             if not instance.shipped_at:
                 instance.shipped_at = timezone.now()

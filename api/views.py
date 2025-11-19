@@ -1,24 +1,19 @@
-from rest_framework import viewsets, status, permissions, generics
-from rest_framework.decorators import action, permission_classes, authentication_classes, api_view
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action, permission_classes, api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
-from django.shortcuts import render, get_object_or_404, redirect
+from django.http import HttpResponse
+from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import AuthenticationForm
-from django.urls import reverse
 import csv
-import json
-from datetime import datetime
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth import authenticate
 from django.db import transaction
-from .models import Product, Order, Company, CustomUser
-from .serializers import ProductSerializer, OrderSerializer, UserSerializer
+from .models import Product, Order
+from .serializers import ProductSerializer, OrderSerializer
 from rest_framework.authtoken.models import Token
 from pathlib import Path
 
@@ -62,7 +57,7 @@ class IsCompanyMember(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         # Users can only access their own company's data
-        if hasattr(obj, 'company'):
+        if hasattr(obj, 'company'): # test if object has attribute company
             return obj.company == request.user.company
         if hasattr(obj, 'get_company'):
             return obj.get_company() == request.user.company
@@ -70,7 +65,7 @@ class IsCompanyMember(permissions.BasePermission):
 
 from functools import wraps
 from django.views.decorators.http import require_http_methods
-
+# CSRF = Cross-Site Request Forgery
 def csrf_exempt_login_required(view_func):
     """
     A decorator that applies csrf_exempt and login_required to a view function.
@@ -81,7 +76,6 @@ def csrf_exempt_login_required(view_func):
     def wrapped_view(request, *args, **kwargs):
         return view_func(request, *args, **kwargs)
     return wrapped_view
-
 class LoginView(APIView):
     """
     View to handle user login and return authentication token.
@@ -93,13 +87,13 @@ class LoginView(APIView):
     def get(self, request, *args, **kwargs):
         # If user is already authenticated, redirect to home
         if request.user.is_authenticated:
-            return redirect('/')
+            return redirect(settings.LOGIN_REDIRECT_URL)
         return Response({}, template_name=self.template_name)
     
     def post(self, request, *args, **kwargs):
         username = request.data.get('username')
         password = request.data.get('password')
-        next_url = request.data.get('next', '/')
+        next_url = request.data.get('next', settings.LOGIN_REDIRECT_URL)
         
         try:
             user = authenticate(request, username=username, password=password)
@@ -107,15 +101,17 @@ class LoginView(APIView):
             if user is not None:
                 if user.is_active:
                     auth_login(request, user)
-                    # For API requests, return token; for web, redirect
-                    if request.accepted_renderer.format == 'api':
+                    # For API requests, return token
+                    if request.accepted_renderer and request.accepted_renderer.format == 'api':
                         token, created = Token.objects.get_or_create(user=user)
                         return Response({
                             'token': token.key,
                             'user_id': user.pk,
                             'username': user.username,
-                            'is_admin': user.is_staff
+                            'is_admin': user.is_admin,
+                            'next': next_url
                         })
+                    # For web requests, redirect to next_url or home
                     return redirect(next_url)
                 else:
                     error_msg = 'This account is inactive.'
@@ -139,13 +135,21 @@ class LoginView(APIView):
             template_name=self.template_name,
             status=status.HTTP_401_UNAUTHORIZED
         )
-
+from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import logout as auth_logout
 
 class LogoutView(APIView):
     """
     View to handle user logout.
     """
-    def post(self, request):
+    def get(self, request, *args, **kwargs):
+        return self.post(request, *args, **kwargs)
+        
+    def post(self, request, *args, **kwargs):
         try:
             # Delete the user's token if it exists
             if hasattr(request.user, 'auth_token'):
@@ -154,16 +158,15 @@ class LogoutView(APIView):
             # Logout the user
             if request.user.is_authenticated:
                 auth_logout(request)
-                
+            
             # For API requests, return success message
             if request.accepted_renderer and request.accepted_renderer.format == 'api':
                 return Response(
                     {'message': 'Successfully logged out.'},
                     status=status.HTTP_200_OK
                 )
-                
-            # For web requests, redirect to login page with success message
-            messages.success(request, 'You have been successfully logged out.')
+            
+            # For web requests, redirect to login page
             return redirect('login')
             
         except Exception as e:
@@ -173,7 +176,6 @@ class LogoutView(APIView):
                     {'error': error_msg},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-            messages.error(request, error_msg)
             return redirect('login')
 
 
@@ -208,7 +210,7 @@ def index(request):
     ).select_related('product', 'created_by').order_by('-created_at')
     
     # Add can_edit flag to each order
-    today = timezone.now().date()
+    # today = timezone.now().date()
     for order in orders:
         order.can_edit = order.can_user_edit(request.user)
     
@@ -226,7 +228,17 @@ class ProductViewSet(viewsets.ModelViewSet):
         # For list action, return only active products (per requirements)
         # For other actions (update, retrieve, destroy), return all products
         # This allows editing and deleting inactive products
-        if self.action in ['list']:
+        """
+        | HTTP Method | URL Pattern     | Action Name |
+        | ----------- | --------------- | ----------- |
+        | GET         | /products/      | list        |
+        | GET         | /products/<id>/ | retrieve    |
+        | POST        | /products/      | create      |
+        | PUT/PATCH   | /products/<id>/ | update      |
+        | DELETE      | /products/<id>/ | destroy     |
+
+        """
+        if self.action in ['list']: # /products/
             return Product.objects.filter(company=self.request.user.company, is_active=True)
         else:
             # Include all products (active and inactive) for update, retrieve, and destroy
